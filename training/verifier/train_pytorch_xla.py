@@ -128,7 +128,9 @@ def train_with_torch(
 
     tokenizer = AutoTokenizer.from_pretrained(backbone)
     dataset = VerifierDataset(examples, tokenizer)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=False)
+    # drop_last keeps a static batch shape so XLA does not recompile on the
+    # final partial batch.
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     # ── Model ────────────────────────────────────────────────────────────────
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -143,63 +145,77 @@ def train_with_torch(
         num_training_steps=total_steps,
     )
 
+    # ── XLA-optimized loaders ────────────────────────────────────────────────
+    # MpDeviceLoader overlaps host->TPU transfer with compute and emits a
+    # mark_step per batch, so we never call `.to(device)` per batch and never
+    # force a host sync inside the loop (that was the main XLA slowdown).
+    if use_xla:
+        from torch_xla.distributed.parallel_loader import MpDeviceLoader
+
+        def device_loader():
+            return MpDeviceLoader(loader, device)
+    else:
+        def device_loader():
+            return loader
+
     # ── Training loop ────────────────────────────────────────────────────────
     history: list[dict[str, Any]] = []
     for epoch in range(epochs):
         model.train()
-        epoch_loss = 0.0
+        running = torch.zeros((), device=device)  # accumulate on-device, no per-step sync
+        steps = 0
         t0 = time.time()
-        for batch in loader:
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            token_type_ids = batch["token_type_ids"].to(device)
-            labels = batch["label"].to(device)
-
+        for batch in device_loader():
+            if not use_xla:
+                batch = {k: v.to(device) for k, v in batch.items()}
             optimizer.zero_grad()
             outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-                labels=labels,
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                token_type_ids=batch["token_type_ids"],
+                labels=batch["label"],
             )
             loss = outputs.loss
             loss.backward()
-
+            # Gradient clipping — DeBERTa-v3 is prone to loss spikes / NaN without it.
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             if use_xla:
                 xm.optimizer_step(optimizer)
             else:
                 optimizer.step()
             scheduler.step()
-            epoch_loss += loss.item()
+            running = running + loss.detach()  # stays lazy on XLA
+            steps += 1
 
         elapsed = time.time() - t0
-        avg_loss = epoch_loss / max(len(loader), 1)
+        avg_loss = float(running.item()) / max(steps, 1)  # single host sync per epoch
         history.append({"epoch": epoch + 1, "loss": avg_loss, "seconds": elapsed})
         print(f"Epoch {epoch+1}/{epochs}  loss={avg_loss:.4f}  ({elapsed:.1f}s)")
 
     # ── Evaluate ─────────────────────────────────────────────────────────────
     model.eval()
-    correct = 0
+    correct = torch.zeros((), device=device)
     total = 0
     with torch.no_grad():
-        for batch in loader:
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            token_type_ids = batch["token_type_ids"].to(device)
-            labels = batch["label"].to(device)
+        for batch in device_loader():
+            if not use_xla:
+                batch = {k: v.to(device) for k, v in batch.items()}
             outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                token_type_ids=batch["token_type_ids"],
             )
             preds = outputs.logits.argmax(dim=-1)
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
+            correct = correct + (preds == batch["label"]).sum()
+            total += batch["label"].size(0)
 
-    accuracy = correct / max(total, 1)
+    accuracy = float(correct.item()) / max(total, 1)
 
     # ── Save ────────────────────────────────────────────────────────────────
+    # Move off the XLA device first — safetensors cannot read a data_ptr from an
+    # XLA tensor.
     output_dir.mkdir(parents=True, exist_ok=True)
+    model = model.to("cpu")
     model.save_pretrained(str(output_dir / "pytorch_model"))
     tokenizer.save_pretrained(str(output_dir / "pytorch_model"))
     print(f"Model saved to {output_dir}/pytorch_model")
