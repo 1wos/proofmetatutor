@@ -107,48 +107,6 @@ API docs (Swagger): ![](apps/web/demo-media/09-swagger-docs.png)
 
 ---
 
-## Project structure
-
-```
-ProofMetaTutor/
-├── training/          # Cloud TPU training — verifier (JAX/Flax) + gemma_tutor (Keras LoRA)
-├── services/
-│   ├── verifier_api/  # FastAPI: /api/verifier/run, /api/check-solution (+ Swagger)
-│   └── backend/       # ADK agent host, in-memory evidence trace, local guardrails
-├── agents/tutor_agent/# Google ADK tutor (explain-first)
-├── apps/web/          # Next.js UI + demo-media (screenshots, video, GIF)
-├── infra/             # Dockerfiles, Cloud Build, Cloud Run deploy scripts
-├── scripts/           # data pipeline (download, negatives, assemble)
-├── skills/            # cloud-tpu-training Agent Skill
-└── docs/              # architecture, cloud TPU runbook, model selection, dataset card, …
-```
-
----
-
-## Reproduce
-
-Training (Cloud TPU): follow [`docs/cloud_tpu_runbook.md`](docs/cloud_tpu_runbook.md)
-(set your own `YOUR_GCP_PROJECT` / `YOUR_GCS_BUCKET`).
-
-Web UI locally:
-
-```bash
-cd apps/web
-cp .env.example .env          # set NEXT_PUBLIC_VERIFIER_API to the API URL
-npm install && npm run dev    # http://localhost:3000
-```
-
----
-
-## Honest notes
-
-- The mBERT verifier scores step **plausibility**; it does not compute, so the
-  `sympy` checker handles arithmetic correctness. Confidence is a teacher-facing
-  signal, not an authoritative grade.
-- The Gemma finetune is a small proof-of-pipeline run (1 epoch, LoRA) — the point
-  is a reproducible *Gemma-on-Cloud-TPU* workflow, not a tuned-for-accuracy release.
-- The evidence store is **in-memory** (per-process); durable storage is out of scope.
-
 ## License
 
 [MIT](LICENSE)
