@@ -1,0 +1,2 @@
+"""Verifier FastAPI app package."""
+

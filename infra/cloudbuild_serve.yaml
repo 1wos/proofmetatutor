@@ -1,0 +1,17 @@
+# Build + push the verifier *API* serving image.
+# `gcloud builds submit --tag` cannot point at a non-root Dockerfile, so we use
+# a config that runs `docker build -f services/verifier_api/Dockerfile`.
+# Deploy is done separately from deploy_cloud_run.sh with the user's creds.
+substitutions:
+  _IMAGE: ""
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_IMAGE}
+      - -f
+      - services/verifier_api/Dockerfile
+      - .
+images:
+  - ${_IMAGE}

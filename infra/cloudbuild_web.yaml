@@ -1,0 +1,18 @@
+# Build + push the Next.js web UI image. NEXT_PUBLIC_VERIFIER_API is baked at
+# build time (Next inlines NEXT_PUBLIC_* into the client bundle).
+substitutions:
+  _IMAGE: ""
+  _API_URL: ""
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_IMAGE}
+      - -f
+      - apps/web/Dockerfile
+      - --build-arg
+      - NEXT_PUBLIC_VERIFIER_API=${_API_URL}
+      - .
+images:
+  - ${_IMAGE}

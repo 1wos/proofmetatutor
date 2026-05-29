@@ -1,0 +1,28 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+outputs/
+data/raw/
+data/processed/
+.env
+.DS_Store
+
+# large derived datasets live in GCS (gs://YOUR_GCS_BUCKET/data), not git
+data/aihub/math_train.jsonl
+data/aihub/math_val.jsonl
+data/synthetic/negatives_train.jsonl
+data/training/verifier_train.jsonl
+# dryrun placeholder junk, never commit
+data/synthetic/negatives_dryrun.jsonl
+data/synthetic/negatives_train_dryrun.jsonl
+# smoke-test debugging outputs (real data is in the bucket)
+data/synthetic/negatives_smoke*.jsonl
+
+
+# node / next
+node_modules/
+.next/
+apps/web/.env

@@ -1,0 +1,3 @@
+{"trace_id":"trace-001","student_alias":"student-a","problem_id":"pt-math-001","student_explanation":"I move 3 to the other side and get 2x equals 8, so x is 4.","self_rating":0.8,"verifier_confidence":0.91,"metacognitive_gap":0.11,"misconception_tags":[],"teacher_action_status":"pending"}
+{"trace_id":"trace-002","student_alias":"student-b","problem_id":"pt-math-002","student_explanation":"I split 6 into 1 and 6, so the answers are 1 and 6.","self_rating":0.7,"verifier_confidence":0.24,"metacognitive_gap":0.46,"misconception_tags":["factorization_error"],"teacher_action_status":"pending"}
+

@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prooftutor"
+version = "0.1.0"
+description = "Cloud TPU-trained evidence verifier for Korean math tutoring."
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.111.0",
+    "pydantic>=2.7.0",
+    "uvicorn>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.5.0",
+]
+training = [
+    "numpy>=1.26.0",
+    "datasets>=2.19.0",
+    "transformers[flax]>=4.41.0",
+    "optax>=0.2.2",
+    "torch>=2.3.0",
+    "sentencepiece>=0.2.0",
+]
+serving = [
+    # transformers v5 dropped Flax entirely (no FlaxAutoModelForSequenceClassification),
+    # so the serving image MUST stay on 4.x to load the TPU-trained flax_model.
+    # jax/flax are pinned to the 0.4.x-era line that transformers 4.x Flax expects.
+    "transformers>=4.44,<5",
+    "flax>=0.8.0,<0.11",
+    "jax[cpu]>=0.4.34,<0.5",
+    # deterministic arithmetic checker for /api/check-solution
+    "sympy>=1.12",
+]
+gcp = [
+    "google-cloud-aiplatform>=1.58.0",
+    "vertexai>=1.58.0",
+]
+# Gemma LoRA fine-tuning on Cloud TPU (Keras 3 / JAX backend + KerasHub).
+# On the TPU VM also install the TPU jaxlib:
+#   pip install -U "jax[tpu]" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+gemma = [
+    "keras>=3.5",
+    "keras-hub>=0.18",
+    "kagglehub>=0.3",
+    "huggingface_hub>=0.23",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agents*", "services*", "training*"]
+
+[tool.ruff]
+line-length = 79
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
